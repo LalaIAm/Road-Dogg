@@ -6,7 +6,7 @@ Incremental implementation starting from project scaffolding through Firebase/Re
 
 ## Tasks
 
-- [ ] 1. Project scaffolding and folder structure
+- [-] 1. Project scaffolding and folder structure
   - Bootstrap a React (JavaScript) app (Vite)
   - Install all dependencies: `@reduxjs/toolkit react-redux firebase @vis.gl/react-google-maps @dnd-kit/core @dnd-kit/sortable fast-check jest @testing-library/react @testing-library/jest-dom`
   - Create folder structure: `src/store/slices`, `src/components`, `src/pages`, `src/firebase`, `src/hooks`, `functions/src/ai`, `functions/src/pdf`
