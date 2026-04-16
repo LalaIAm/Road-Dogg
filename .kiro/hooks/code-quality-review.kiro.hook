@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Code Quality Review",
+  "description": "When source code files are saved, analyzes the modified code for potential improvements including code smells, design patterns, and best practices. Generates suggestions for readability, maintainability, and performance optimizations.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.js",
+      "functions/src/**/*.js"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A source file was just modified. Please analyze the changes for potential improvements. Look for:\n- Code smells (duplicated logic, overly complex functions, unclear naming)\n- Opportunities to apply design patterns appropriate for this React/Redux/Firebase stack\n- Best practices for the tech stack (React hooks, Redux Toolkit patterns, Firestore usage)\n- Readability improvements (variable naming, function decomposition, comments)\n- Performance optimizations (unnecessary re-renders, inefficient data fetching, memoization opportunities)\n- Maintainability concerns (tight coupling, missing error handling, hardcoded values)\n\nProvide concise, actionable suggestions while preserving the existing functionality. Do not make changes unless asked."
+  }
+}
