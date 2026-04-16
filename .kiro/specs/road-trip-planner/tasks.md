@@ -1,0 +1,315 @@
+# Implementation Plan: Road Trip Planner (RoadDoggs)
+
+## Overview
+
+Incremental implementation starting from project scaffolding through Firebase/Redux setup, core UI, Google Maps integration, Cloud Functions + AI engine, itinerary display, trip persistence, sharing, PDF export, and finally property-based and integration tests. Each task builds on the previous and ends with all pieces wired together.
+
+## Tasks
+
+- [ ] 1. Project scaffolding and folder structure
+  - Bootstrap a React (JavaScript) app (Vite)
+  - Install all dependencies: `@reduxjs/toolkit react-redux firebase @vis.gl/react-google-maps @dnd-kit/core @dnd-kit/sortable fast-check jest @testing-library/react @testing-library/jest-dom`
+  - Create folder structure: `src/store/slices`, `src/components`, `src/pages`, `src/firebase`, `src/hooks`, `functions/src/ai`, `functions/src/pdf`
+  - Initialize Firebase project config in `src/firebase/config.js` (Auth, Firestore, Storage, Functions)
+  - Add `.env` template for `REACT_APP_GOOGLE_MAPS_API_KEY` and Firebase config vars
+  - _Requirements: 1.1_
+
+- [ ] 2. Redux store and all five slices
+  - [ ] 2.1 Create `store/index.js` with `configureStore` wiring all five reducers
+    - _Requirements: 1.1, 2.1, 3.1, 6.1, 4.1_
+  - [ ] 2.2 Implement `authSlice` — mirrors Firebase Auth user (uid, email, displayName); actions: `setUser`, `clearUser`
+    - _Requirements: 6.5, 10.10_
+  - [ ] 2.3 Implement `tripConfigSlice` — origin, destination, dates, preferences, pacing, accommodation; actions: `setOrigin`, `setDestination`, `setDates`, `togglePreference`, `addCustomPreference`, `removeCustomPreference`, `setPacing`, `setAccommodation`, `resetConfig`
+    - _Requirements: 1.1, 1.2, 2.2, 2.3, 2.5, 2.6, 8.1–8.6, 9.1–9.4_
+  - [ ] 2.4 Implement `itinerarySlice` — active `Itinerary` object; actions: `setItinerary`, `removeStop`, `reorderStops`, `replaceStop`, `clearItinerary`; `extraReducers` for `generateItinerary` and `generateAlternativeStop` thunks (pending/fulfilled/rejected)
+    - _Requirements: 3.1, 4.1–4.5, 5.1–5.4_
+  - [ ] 2.5 Implement `savedTripsSlice` — trip summary list; actions: `addTrip`, `removeTrip`, `setTrips`; `extraReducers` for `saveTrip`, `loadSavedTrips`, `deleteTrip` thunks
+    - _Requirements: 6.1–6.4_
+  - [ ] 2.6 Implement `uiSlice` — loading flags (`isGenerating`, `isSaving`, `isExporting`), error messages, modal state; actions: `setLoading`, `setError`, `clearError`, `openModal`, `closeModal`
+    - _Requirements: 3.4, 3.5, 7.3, 7.4_
+  - [ ]\* 2.7 Write unit tests for all slice reducers and actions
+    - Test initial state, each action, and edge cases (e.g., removing a preference that doesn't exist)
+    - _Requirements: 2.2, 2.3, 2.5, 2.6, 5.1, 5.2_
+
+- [ ] 3. Firebase Auth and AuthContext
+  - [ ] 3.1 Create `firebase/auth.js` — export `signInWithEmail`, `signUpWithEmail`, `signInWithGoogle`, `signOut` helpers
+    - _Requirements: 6.5, 10.10_
+  - [ ] 3.2 Create `AuthContext` (`src/context/AuthContext.js`) — wraps `onAuthStateChanged`; dispatches `setUser`/`clearUser` to Redux on change
+    - _Requirements: 6.5, 10.10_
+  - [ ] 3.3 Create `AuthPage` component — email/password sign-in/sign-up forms + Google OAuth button; inline error display for Firebase Auth errors
+    - _Requirements: 6.5, 10.10_
+  - [ ] 3.4 Add protected route logic — redirect unauthenticated users attempting save/share to `AuthPage`; restore original action after sign-in
+    - _Requirements: 6.5, 10.10_
+  - [ ]\* 3.5 Write unit tests for `AuthContext` and `AuthPage`
+    - Test that `setUser` is dispatched on sign-in and `clearUser` on sign-out
+    - Test inline error rendering for bad credentials
+    - _Requirements: 6.5_
+
+- [ ] 4. Core trip configuration UI components
+  - [ ] 4.1 Implement `LocationInputs` component — origin and destination text inputs with Google Places Autocomplete; local state for input text; dispatches `setOrigin`/`setDestination` on selection; inline error when geocoding fails
+    - _Requirements: 1.1, 1.3, 1.4, 1.5_
+  - [ ] 4.2 Implement `DateRangePicker` component — optional start/end date inputs; dispatches `setDates`
+    - _Requirements: 1.2_
+  - [ ] 4.3 Implement `PreferenceSelector` component — 12 preset chips (Scenic, Historical, Art, Local Gems, Off the Beaten Path, Kid-Friendly, Food & Drink, Adventure, Relaxation, Nature, Luxury, Sports) with visual selected/unselected state; custom free-text input with add/remove; dispatches `togglePreference`, `addCustomPreference`, `removeCustomPreference`
+    - _Requirements: 2.1–2.8_
+  - [ ] 4.4 Implement `PacingSelector` component — three preset buttons (Leisurely/200, Moderate/350, Aggressive/500) each with an editable mileage input; custom entry field; local state for in-progress edits; promotes to `tripConfigSlice` on form submit
+    - _Requirements: 9.1–9.4_
+  - [ ] 4.5 Implement `AccommodationPanel` — `AccomPreferenceSelector` (6 presets + custom free-text) and `BudgetInputs` (nightly + trip budget); dispatches `setAccommodation`
+    - _Requirements: 8.1–8.6_
+  - [ ] 4.6 Assemble `TripConfigPanel` — composes `LocationInputs`, `DateRangePicker`, `PreferenceSelector`, `PacingSelector`, `AccommodationPanel`; "Generate Trip" button dispatches `generateItinerary` thunk; shows validation errors for missing origin/destination
+    - _Requirements: 1.1, 1.3, 3.1_
+  - [ ]\* 4.7 Write unit tests for `TripConfigPanel`, `PreferenceSelector`, and `PacingSelector`
+    - Test submit without origin/destination shows validation errors
+    - Test toggling presets updates selected state; custom input adds/removes entries
+    - Test editing a preset threshold updates the mileage value
+    - _Requirements: 1.3, 2.2, 2.5, 2.6, 9.2_
+
+- [ ] 5. Google Maps integration
+  - [ ] 5.1 Configure `@vis.gl/react-google-maps` `APIProvider` at app root with `REACT_APP_GOOGLE_MAPS_API_KEY`
+    - _Requirements: 4.1_
+  - [ ] 5.2 Implement `MapView` component — renders `<Map>` with `<Marker>` for each stop and `<Polyline>` for the route; reads from `itinerarySlice`
+    - _Requirements: 4.1_
+  - [ ] 5.3 Wire Places Autocomplete into `LocationInputs` using the Places API (New) `usePlacesAutocomplete` or equivalent; resolve selected place to `{ address, lat, lng }`
+    - _Requirements: 1.4, 1.5_
+  - [ ]\* 5.4 Write unit tests for `MapView`
+    - Test that markers render for each stop in the itinerary
+    - _Requirements: 4.1_
+
+- [ ] 6. Cloud Functions — project setup and scaffolding
+  - [ ] 6.1 Initialize Firebase Functions project (`functions/`) with Node.js 20; install `firebase-admin`, `firebase-functions`, `@google/generative-ai`, `openai`, `ajv`, `pdfkit`, `axios`
+    - _Requirements: 3.1, 7.1_
+  - [ ] 6.2 Create `functions/src/ai/aiAdapter.js` — abstract `AIAdapter` base class with `generateItinerary(config)` and `generateAlternativeStop(stopId, preferenceTag, config)` methods; export `aiAdapter` singleton configured by `AI_PROVIDER` env var
+    - _Requirements: 3.1, 5.4_
+  - [ ] 6.3 Implement `GeminiAdapter` — constructs structured system + user prompt from `TripConfig`; calls `gemini-1.5-pro` with JSON mode and `response_schema`; returns parsed `Itinerary`
+    - _Requirements: 3.1, 3.2, 3.3, 4.2, 4.3, 8.7–8.9, 9.5, 9.7_
+  - [ ] 6.4 Implement `OpenAIAdapter` — same interface as `GeminiAdapter`; calls `gpt-4o` with `response_format: { type: "json_object" }`; used as fallback when `AI_PROVIDER=openai`
+    - _Requirements: 3.1_
+  - [ ] 6.5 Implement response validation in Cloud Functions — validate AI JSON against schema using `ajv`; verify stop coordinates within route bounding box; check total distance ≤ 150% of direct distance; retry once with error-correction prompt on failure
+    - _Requirements: 3.6_
+  - [ ] 6.6 Implement pacing feasibility check — compute `minDays = ceil(directDistanceMiles / maxMilesPerLeg)`; return `PACING_INFEASIBLE` error with `minDays` if `minDays > availableTravelDays`
+    - _Requirements: 9.8_
+  - [ ] 6.7 Implement `generateItinerary` HTTPS Callable function — validates auth, calls feasibility check, calls `aiAdapter.generateItinerary`, validates response, returns `Itinerary`; 60s timeout
+    - _Requirements: 3.1, 3.4, 3.5, 9.8_
+  - [ ] 6.8 Implement `generateAlternativeStop` HTTPS Callable function — calls `aiAdapter.generateAlternativeStop`; returns replacement `Stop` with same `preferenceTag`
+    - _Requirements: 5.4, 5.5, 5.6_
+  - [ ]\* 6.9 Write unit tests for AI adapter prompt construction and response parsing
+    - Test `GeminiAdapter` builds correct prompt from `TripConfig`
+    - Test `OpenAIAdapter` builds correct prompt from `TripConfig`
+    - Test response parsing with mocked valid and invalid API responses
+    - Test retry logic on invalid JSON response
+    - _Requirements: 3.1, 3.2_
+
+- [ ] 7. Itinerary display components
+  - [ ] 7.1 Implement `StopCard` component — displays stop name, address, preference tag, description, drive time from previous, distance from previous; "Remove" button dispatches `removeStop`; "Get Alternative" button dispatches `generateAlternativeStop` thunk; inline notification when no alternative found
+    - _Requirements: 4.2, 4.3, 5.1, 5.4, 5.6_
+  - [ ] 7.2 Implement `StopList` component — renders `StopCard` list wrapped in `@dnd-kit` `DndContext` + `SortableContext`; drag-and-drop reorder dispatches `reorderStops` and triggers drive time recalculation; local dnd state via `@dnd-kit`
+    - _Requirements: 5.2, 5.3_
+  - [ ] 7.3 Implement `AccommodationCard` component — displays name, address, estimated nightly rate, preference tag, booking links as outbound anchor tags
+    - _Requirements: 8.11, 8.12_
+  - [ ] 7.4 Implement `AccommodationList` component — renders one `AccommodationCard` per leg; shows budget-exceeded warning banner when accommodation exceeds budget
+    - _Requirements: 8.10, 8.11_
+  - [ ] 7.5 Implement `TripSummaryBar` component — displays total distance and total drive time from `itinerarySlice`; reads `totalDistanceMiles` and `totalDriveTimeMinutes`
+    - _Requirements: 4.4_
+  - [ ] 7.6 Assemble `ItineraryView` — composes `MapView`, `StopList`, `AccommodationList`, `TripSummaryBar`; shows pacing infeasibility warning when `uiSlice` contains `PACING_INFEASIBLE` error
+    - _Requirements: 4.1–4.5, 9.8_
+  - [ ]\* 7.7 Write unit tests for `StopList`, `AccommodationCard`, and `TripSummaryBar`
+    - Test drag-and-drop reorder updates stop order
+    - Test removing a stop triggers recalculation
+    - Test `AccommodationCard` renders name, address, rate, preference tag, and booking links
+    - _Requirements: 5.1, 5.2, 5.3, 8.11_
+
+- [ ] 8. Checkpoint — wire config → generation → display
+  - Connect `TripConfigPanel` → `generateItinerary` thunk → `itinerarySlice` → `ItineraryView` end-to-end
+  - Verify loading state (`isGenerating`) shows spinner; error state shows toast with retry button
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 9. Trip saving and retrieval
+  - [ ] 9.1 Create `firebase/firestore.js` — export Firestore `db` instance and helper functions: `saveTripDoc`, `getTripDoc`, `getUserTrips`, `updateTripDoc`, `deleteTripDoc`
+    - _Requirements: 6.1–6.4_
+  - [ ] 9.2 Implement `saveTrip` async thunk — writes full `TripConfig` + `Itinerary` + accommodations + booking links to `trips/{tripId}`; sets `ownerId`, `createdAt`, `updatedAt`, `status: "saved"`
+    - _Requirements: 6.1, 6.2, 8.13_
+  - [ ] 9.3 Implement `loadSavedTrips` async thunk — queries `trips` where `ownerId == uid`; populates `savedTripsSlice`
+    - _Requirements: 6.3_
+  - [ ] 9.4 Implement `deleteTrip` async thunk — deletes `trips/{tripId}` document; removes from `savedTripsSlice`
+    - _Requirements: 6.3_
+  - [ ] 9.5 Implement `SavedTripsPage` — lists saved trips via `TripCard`; "Load" restores full itinerary to `itinerarySlice`; "Delete" dispatches `deleteTrip`
+    - _Requirements: 6.3, 6.4_
+  - [ ] 9.6 Implement `TripActionBar` — "Save" button (prompts for trip name, dispatches `saveTrip`; redirects unauthenticated users to `AuthPage`); shows `isSaving` spinner
+    - _Requirements: 6.1, 6.5_
+  - [ ]\* 9.7 Write unit tests for `saveTrip` and `loadSavedTrips` thunks with mocked Firestore
+    - Test that saved trip document contains all required fields
+    - Test that `loadSavedTrips` returns only trips owned by the current user
+    - _Requirements: 6.1, 6.2, 6.3_
+
+- [ ] 10. Trip sharing
+  - [ ] 10.1 Implement `createShareableLink` HTTPS Callable function — generates UUID `shareToken`; writes `trips/{tripId}/shareLinks/{shareToken}` with `accessLevel`, `active: true`, `createdAt`, `createdBy`; returns `{ shareToken, url }`
+    - _Requirements: 10.1, 10.4_
+  - [ ] 10.2 Implement `revokeShareableLink` HTTPS Callable function — sets `shareLinks/{shareToken}.active = false`; owner-only
+    - _Requirements: 10.8, 10.9_
+  - [ ] 10.3 Implement `grantTripAccess` HTTPS Callable function — updates `trips/{tripId}.access[targetUserId]` with specified access level; owner-only
+    - _Requirements: 10.5_
+  - [ ] 10.4 Implement `SharedTripPage` — reads `shareLinks/{shareToken}` then `trips/{tripId}`; renders `ItineraryView` in view-only mode for `"view"` access; renders editable view for authenticated users with `"edit"` access; shows "link no longer active" error for invalidated tokens
+    - _Requirements: 10.2, 10.3, 10.7, 10.9_
+  - [ ] 10.5 Implement Firestore security rules — owner full access; direct share edit/view per `access` map; public link read when `active === true`; share link write restricted to owner
+    - _Requirements: 10.4, 10.5, 10.7, 10.8_
+  - [ ] 10.6 Wire real-time `onSnapshot` listener on `trips/{tripId}` for users with edit access — dispatches `setItinerary` on remote changes to support collaborative editing
+    - _Requirements: 10.6_
+  - [ ] 10.7 Add "Share" UI in `TripActionBar` — "Copy Link" calls `createShareableLink` (view-only default) and copies URL to clipboard; "Share with User" input calls `grantTripAccess`; "Revoke" calls `revokeShareableLink`; redirects unauthenticated users to `AuthPage`
+    - _Requirements: 10.1, 10.5, 10.8, 10.10_
+  - [ ]\* 10.8 Write unit tests for sharing Cloud Functions with mocked Firestore
+    - Test `createShareableLink` writes correct document and returns URL
+    - Test `revokeShareableLink` sets `active: false`
+    - Test `grantTripAccess` updates `access` map correctly
+    - _Requirements: 10.1, 10.5, 10.8_
+
+- [ ] 11. PDF export
+  - [ ] 11.1 Implement `generatePDF` HTTPS Callable function — reads `trips/{tripId}` from Firestore; fetches static map image from Maps Static API; uses `pdfkit` to render stops, descriptions, drive times, and map image; uploads to `trips/{tripId}/export.pdf` in Firebase Storage; returns signed download URL (1-hour expiry)
+    - _Requirements: 7.1, 7.3_
+  - [ ] 11.2 Add "Export PDF" button to `TripActionBar` — dispatches `exportPDF` thunk; shows `isExporting` spinner; triggers browser download on success; shows toast error with retry on failure or timeout
+    - _Requirements: 7.2, 7.3, 7.4_
+  - [ ]\* 11.3 Write unit tests for `generatePDF` function with mocked Firestore and Storage
+    - Test that PDF generation is called with correct trip data
+    - Test that download URL is returned on success
+    - Test error handling when PDF generation fails
+    - _Requirements: 7.1, 7.3, 7.4_
+
+- [ ] 12. Checkpoint — full end-to-end smoke test
+  - Verify: configure trip → generate → view on map → save → load from saved trips → share link → export PDF
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [ ] 13. Property-based tests (fast-check)
+  - [ ] 13.1 Write property test for Property 1: Missing origin or destination blocks generation
+    - **Property 1: Missing origin or destination blocks generation**
+    - **Validates: Requirements 1.1, 1.3**
+    - Tag: `// Feature: road-trip-planner, Property 1: Missing origin or destination blocks generation`
+  - [ ] 13.2 Write property test for Property 2: Geocoding validation always resolves or errors
+    - **Property 2: Geocoding validation always resolves or errors**
+    - **Validates: Requirements 1.4, 1.5**
+    - Tag: `// Feature: road-trip-planner, Property 2: Geocoding validation always resolves or errors`
+  - [ ] 13.3 Write property test for Property 3: Preference selection completeness
+    - **Property 3: Preference selection completeness**
+    - **Validates: Requirements 2.2, 2.3, 2.4**
+    - Tag: `// Feature: road-trip-planner, Property 3: Preference selection completeness`
+  - [ ] 13.4 Write property test for Property 4: Preference selection round-trip
+    - **Property 4: Preference selection round-trip**
+    - **Validates: Requirements 2.5, 2.6**
+    - Tag: `// Feature: road-trip-planner, Property 4: Preference selection round-trip`
+  - [ ] 13.5 Write property test for Property 5: Itinerary structural completeness
+    - **Property 5: Itinerary structural completeness**
+    - **Validates: Requirements 3.1, 4.2, 4.3**
+    - Tag: `// Feature: road-trip-planner, Property 5: Itinerary structural completeness`
+  - [ ] 13.6 Write property test for Property 6: Stop preference tags are subset of input preferences
+    - **Property 6: Stop preference tags are subset of input preferences**
+    - **Validates: Requirements 3.2**
+    - Tag: `// Feature: road-trip-planner, Property 6: Stop preference tags are subset of input preferences`
+  - [ ] 13.7 Write property test for Property 7: Route distance does not exceed 150% of direct distance
+    - **Property 7: Route distance does not exceed 150% of direct distance**
+    - **Validates: Requirements 3.6**
+    - Tag: `// Feature: road-trip-planner, Property 7: Route distance does not exceed 150% of direct distance`
+  - [ ] 13.8 Write property test for Property 8: Itinerary totals equal sum of leg values
+    - **Property 8: Itinerary totals equal sum of leg values**
+    - **Validates: Requirements 4.4, 5.3**
+    - Tag: `// Feature: road-trip-planner, Property 8: Itinerary totals equal sum of leg values`
+  - [ ] 13.9 Write property test for Property 9: Stop removal shrinks list by exactly one
+    - **Property 9: Stop removal shrinks list by exactly one**
+    - **Validates: Requirements 5.1**
+    - Tag: `// Feature: road-trip-planner, Property 9: Stop removal shrinks list by exactly one`
+  - [ ] 13.10 Write property test for Property 10: Stop reorder preserves stop set
+    - **Property 10: Stop reorder preserves stop set**
+    - **Validates: Requirements 5.2**
+    - Tag: `// Feature: road-trip-planner, Property 10: Stop reorder preserves stop set`
+  - [ ] 13.11 Write property test for Property 11: Alternative stop preserves preference tag
+    - **Property 11: Alternative stop preserves preference tag**
+    - **Validates: Requirements 5.4**
+    - Tag: `// Feature: road-trip-planner, Property 11: Alternative stop preserves preference tag`
+  - [ ] 13.12 Write property test for Property 12: Trip persistence round-trip
+    - **Property 12: Trip persistence round-trip**
+    - **Validates: Requirements 6.1, 6.2, 6.4, 8.13**
+    - Tag: `// Feature: road-trip-planner, Property 12: Trip persistence round-trip`
+  - [ ] 13.13 Write property test for Property 13: Trip list contains all saved trips
+    - **Property 13: Trip list contains all saved trips**
+    - **Validates: Requirements 6.3**
+    - Tag: `// Feature: road-trip-planner, Property 13: Trip list contains all saved trips`
+  - [ ] 13.14 Write property test for Property 14: PDF content completeness
+    - **Property 14: PDF content completeness**
+    - **Validates: Requirements 7.1**
+    - Tag: `// Feature: road-trip-planner, Property 14: PDF content completeness`
+  - [ ] 13.15 Write property test for Property 15: Share token uniqueness
+    - **Property 15: Share token uniqueness**
+    - **Validates: Requirements 10.1**
+    - Tag: `// Feature: road-trip-planner, Property 15: Share token uniqueness`
+  - [ ] 13.16 Write property test for Property 16: View-only share link grants unauthenticated read access
+    - **Property 16: View-only share link grants unauthenticated read access**
+    - **Validates: Requirements 10.2**
+    - Tag: `// Feature: road-trip-planner, Property 16: View-only share link grants unauthenticated read access`
+  - [ ] 13.17 Write property test for Property 17: Share link access level is stored and enforced
+    - **Property 17: Share link access level is stored and enforced**
+    - **Validates: Requirements 10.4**
+    - Tag: `// Feature: road-trip-planner, Property 17: Share link access level is stored and enforced`
+  - [ ] 13.18 Write property test for Property 18: Direct trip access grant is stored correctly
+    - **Property 18: Direct trip access grant is stored correctly**
+    - **Validates: Requirements 10.5**
+    - Tag: `// Feature: road-trip-planner, Property 18: Direct trip access grant is stored correctly`
+  - [ ] 13.19 Write property test for Property 19: View-only access rejects write operations
+    - **Property 19: View-only access rejects write operations**
+    - **Validates: Requirements 10.7**
+    - Tag: `// Feature: road-trip-planner, Property 19: View-only access rejects write operations`
+  - [ ] 13.20 Write property test for Property 20: Revoked share link denies access
+    - **Property 20: Revoked share link denies access**
+    - **Validates: Requirements 10.8, 10.9**
+    - Tag: `// Feature: road-trip-planner, Property 20: Revoked share link denies access`
+  - [ ] 13.21 Write property test for Property 21: Accommodation nightly rate within budget
+    - **Property 21: Accommodation nightly rate within budget**
+    - **Validates: Requirements 8.7**
+    - Tag: `// Feature: road-trip-planner, Property 21: Accommodation nightly rate within budget`
+  - [ ] 13.22 Write property test for Property 22: Total accommodation cost within trip budget
+    - **Property 22: Total accommodation cost within trip budget**
+    - **Validates: Requirements 8.8**
+    - Tag: `// Feature: road-trip-planner, Property 22: Total accommodation cost within trip budget`
+  - [ ] 13.23 Write property test for Property 23: Accommodation structural completeness
+    - **Property 23: Accommodation structural completeness**
+    - **Validates: Requirements 8.11**
+    - Tag: `// Feature: road-trip-planner, Property 23: Accommodation structural completeness`
+  - [ ] 13.24 Write property test for Property 24: Pacing threshold is editable and applied
+    - **Property 24: Pacing threshold is editable and applied**
+    - **Validates: Requirements 9.2, 9.4**
+    - Tag: `// Feature: road-trip-planner, Property 24: Pacing threshold is editable and applied`
+  - [ ] 13.25 Write property test for Property 25: Each leg respects pacing limit
+    - **Property 25: Each leg respects pacing limit**
+    - **Validates: Requirements 9.5, 9.7**
+    - Tag: `// Feature: road-trip-planner, Property 25: Each leg respects pacing limit`
+  - [ ] 13.26 Write property test for Property 26: Pacing feasibility check is correct
+    - **Property 26: Pacing feasibility check is correct**
+    - **Validates: Requirements 9.8**
+    - Tag: `// Feature: road-trip-planner, Property 26: Pacing feasibility check is correct`
+
+- [ ] 14. Integration tests (Firebase emulator)
+  - [ ]\* 14.1 Write integration tests for Firebase Auth flow
+    - Test sign up, sign in with email/password, sign in with Google OAuth, sign out using Firebase Auth emulator
+    - Test that `users/{userId}` document is created on first sign-in
+    - _Requirements: 6.5, 10.10_
+  - [ ]\* 14.2 Write integration tests for Firestore CRUD
+    - Test save trip, retrieve trip list, update trip, delete trip using Firestore emulator
+    - Verify all fields (config, itinerary, accommodations, booking links, preferences, dates) are persisted
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 8.13_
+  - [ ]\* 14.3 Write integration tests for share link flow
+    - Test create link, open link as unauthenticated user, revoke link using Firestore emulator
+    - Test that revoked link returns access denied
+    - _Requirements: 10.1, 10.2, 10.8, 10.9_
+  - [ ]\* 14.4 Write integration test for `generateItinerary` Cloud Function
+    - End-to-end test with mocked Gemini response using Firebase Functions emulator
+    - Verify returned `Itinerary` passes schema validation
+    - _Requirements: 3.1, 3.4_
+
+- [ ] 15. Final checkpoint — all tests pass
+  - Run full test suite (`jest --run` or `npm test -- --watchAll=false`)
+  - Ensure all non-optional tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for a faster MVP
+- Each task references specific requirements for traceability
+- Checkpoints (tasks 8, 12, 15) ensure incremental validation at key milestones
+- Property tests (task 13) use `fast-check` with a minimum of 100 iterations each and the tag format `// Feature: road-trip-planner, Property N: ...`
+- All 26 correctness properties from the design document are covered by tasks 13.1–13.26
+- Integration tests (task 14) require Firebase emulator suite (`firebase emulators:start`)
