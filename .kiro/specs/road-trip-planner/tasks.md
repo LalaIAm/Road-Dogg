@@ -6,7 +6,7 @@ Incremental implementation starting from project scaffolding through Firebase/Re
 
 ## Tasks
 
-- [-] 1. Project scaffolding and folder structure
+- [x] 1. Project scaffolding and folder structure
   - Bootstrap a React (JavaScript) app (Vite)
   - Install all dependencies: `@reduxjs/toolkit react-redux firebase @vis.gl/react-google-maps @dnd-kit/core @dnd-kit/sortable fast-check jest @testing-library/react @testing-library/jest-dom`
   - Create folder structure: `src/store/slices`, `src/components`, `src/pages`, `src/firebase`, `src/hooks`, `functions/src/ai`, `functions/src/pdf`
@@ -14,7 +14,7 @@ Incremental implementation starting from project scaffolding through Firebase/Re
   - Add `.env` template for `REACT_APP_GOOGLE_MAPS_API_KEY` and Firebase config vars
   - _Requirements: 1.1_
 
-- [ ] 2. Redux store and all five slices
+- [-] 2. Redux store and all five slices
   - [ ] 2.1 Create `store/index.js` with `configureStore` wiring all five reducers
     - _Requirements: 1.1, 2.1, 3.1, 6.1, 4.1_
   - [ ] 2.2 Implement `authSlice` — mirrors Firebase Auth user (uid, email, displayName); actions: `setUser`, `clearUser`
